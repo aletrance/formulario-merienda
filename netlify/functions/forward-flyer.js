@@ -1,4 +1,4 @@
-const Busboy = require('busboy');
+const busboy = require('busboy');
 const fetch = require('node-fetch');
 
 exports.handler = async (event) => {
@@ -7,7 +7,7 @@ exports.handler = async (event) => {
   }
 
   return new Promise((resolve, reject) => {
-    const busboy = new Busboy({
+    const bb = busboy({
       headers: {
         'content-type': event.headers['content-type'] || event.headers['Content-Type'],
       },
@@ -16,11 +16,11 @@ exports.handler = async (event) => {
     let fields = {};
     let files = [];
 
-    busboy.on('field', (fieldname, val) => {
+    bb.on('field', (fieldname, val) => {
       fields[fieldname] = val;
     });
 
-    busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
+    bb.on('file', (fieldname, file, filename, encoding, mimetype) => {
       let fileData = [];
       file.on('data', (data) => {
         fileData.push(data);
@@ -36,7 +36,7 @@ exports.handler = async (event) => {
       });
     });
 
-    busboy.on('finish', async () => {
+    bb.on('finish', async () => {
       if (fields.secret !== "TOKENSECRETO123") {
         return resolve({ statusCode: 401, body: "unauthorized, secret recibido: " + fields.secret });
       }
@@ -73,6 +73,6 @@ exports.handler = async (event) => {
       });
     });
 
-    busboy.end(Buffer.from(event.body, 'base64'));
+    bb.end(Buffer.from(event.body, 'base64'));
   });
 };
