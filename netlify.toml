@@ -1,0 +1,10 @@
+[functions]
+  node_bundler = "esbuild"
+
+[build]
+  publish = "."      # la carpeta raíz donde están tus HTML
+
+[[redirects]]           # redirige el POST del form
+  from   = "/enviar-flyer"
+  to     = "/.netlify/functions/forward-flyer"
+  status = 200
