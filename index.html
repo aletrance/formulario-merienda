@@ -8,7 +8,7 @@
        netlify-honeypot="bot-field"
        method="POST"
        enctype="multipart/form-data"
-       action="/enviado.html"><!-- redirección cliente -->
+       action="#" id="formulario-debug"><!-- MODO DEBUG: no redirige -->
 
   <!-- Campo oculto para Netlify Forms anti-bots -->
   <input type="hidden" name="bot-field">
@@ -32,5 +32,17 @@
   <button type="submit">Enviar flyer</button>
 </form>
 
+<script>
+document.getElementById('formulario-debug').onsubmit = async function(e) {
+  e.preventDefault();
+  const formData = new FormData(this);
+  const response = await fetch(window.location.pathname, {
+    method: 'POST',
+    body: formData
+  });
+  const text = await response.text();
+  document.body.innerHTML = '<pre>' + text + '</pre>';
+};
+</script>
 </body>
 </html>
