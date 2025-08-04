@@ -1,7 +1,7 @@
-import Busboy from 'busboy';
-import fetch from "node-fetch";
+const Busboy = require('busboy');
+const fetch = require('node-fetch');
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
@@ -31,13 +31,12 @@ export const handler = async (event) => {
           filename,
           encoding,
           mimetype,
-          data: Buffer.concat(fileData).toString('base64') // Si deseas enviar el archivo en base64
+          data: Buffer.concat(fileData).toString('base64')
         });
       });
     });
 
     busboy.on('finish', async () => {
-      // Validación de secreto
       if (fields.secret !== "TOKENSECRETO123") {
         return resolve({ statusCode: 401, body: "unauthorized, secret recibido: " + fields.secret });
       }
@@ -45,15 +44,13 @@ export const handler = async (event) => {
         return resolve({ statusCode: 400, body: "no file" });
       }
 
-      // Construye el payload para n8n
       const payload = {
         flyer_filename: files[0].filename,
         flyer_mimetype: files[0].mimetype,
-        flyer_base64: files[0].data, // Puedes omitir esto si no quieres enviar el archivo
+        flyer_base64: files[0].data,
         categoria: fields.categoria || "merienda"
       };
 
-      // ENVÍA AL WEBHOOK DE N8N
       let webhookResult;
       try {
         const response = await fetch("https://n8n.srv750784.hstgr.cloud/webhook/wa-inbound", {
