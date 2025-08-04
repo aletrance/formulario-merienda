@@ -3,74 +3,99 @@ const fetch = require('node-fetch');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Method Not Allowed' }),
+    };
   }
 
-  return new Promise((resolve, reject) => {
-    const bb = busboy({
-      headers: {
-        'content-type': event.headers['content-type'] || event.headers['Content-Type'],
-      },
-    });
-
+  return await new Promise((resolve) => {
     let fields = {};
-    let files = [];
+    let fileBuffer = Buffer.alloc(0);
+    let fileInfo = {};
+    let hasFile = false;
+    let errorSent = false;
+
+    const bb = busboy({ headers: event.headers });
 
     bb.on('field', (fieldname, val) => {
       fields[fieldname] = val;
     });
 
     bb.on('file', (fieldname, file, filename, encoding, mimetype) => {
-      let fileData = [];
+      hasFile = true;
+      fileInfo = { filename, encoding, mimetype };
       file.on('data', (data) => {
-        fileData.push(data);
+        fileBuffer = Buffer.concat([fileBuffer, data]);
       });
-      file.on('end', () => {
-        files.push({
-          fieldname,
-          filename,
-          encoding,
-          mimetype,
-          data: Buffer.concat(fileData).toString('base64')
-        });
+      file.on('limit', () => {
+        if (!errorSent) {
+          errorSent = true;
+          resolve({
+            statusCode: 413,
+            body: JSON.stringify({ error: 'Archivo demasiado grande' }),
+          });
+        }
       });
     });
 
     bb.on('finish', async () => {
-      if (fields.secret !== "TOKENSECRETO123") {
-        return resolve({ statusCode: 401, body: "unauthorized, secret recibido: " + fields.secret });
-      }
-      if (!files.length) {
-        return resolve({ statusCode: 400, body: "no file" });
-      }
-
-      const payload = {
-        flyer_filename: files[0].filename,
-        flyer_mimetype: files[0].mimetype,
-        flyer_base64: files[0].data,
-        categoria: fields.categoria || "merienda"
-      };
-
-      let webhookResult;
-      try {
-        const response = await fetch("https://n8n.srv750784.hstgr.cloud/webhook/wa-inbound", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+      if (errorSent) return;
+      // Validar secreto
+      if (fields.secreto !== 'TOKENSECRETO123') {
+        resolve({
+          statusCode: 403,
+          body: JSON.stringify({ error: 'Secreto inválido' }),
         });
-        webhookResult = await response.text();
-      } catch (err) {
-        webhookResult = `Error enviando al webhook: ${err}`;
+        return;
       }
+      if (!hasFile || !fileInfo.filename) {
+        resolve({
+          statusCode: 400,
+          body: JSON.stringify({ error: 'No se recibió archivo' }),
+        });
+        return;
+      }
+      const payload = {
+        ...fields,
+        file: {
+          filename: fileInfo.filename,
+          mimetype: fileInfo.mimetype,
+          encoding: fileInfo.encoding,
+          data: fileBuffer.toString('base64'),
+        },
+      };
+      try {
+        const response = await fetch('https://n8n.srv750784.hstgr.cloud/webhook/wa-inbound', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const respText = await response.text();
+        // Redirigir a la página de éxito
+        resolve({
+          statusCode: 302,
+          headers: {
+            Location: '/enviado.html'
+          },
+          body: ''
+        });
+      } catch (err) {
+        resolve({
+          statusCode: 500,
+          body: JSON.stringify({ error: 'Error enviando al webhook', details: err.message }),
+        });
+      }
+    });
 
-      resolve({
-        statusCode: 200,
-        body: JSON.stringify({
-          enviado: true,
-          payload,
-          webhookResult
-        })
-      });
+    bb.on('error', (err) => {
+      if (!errorSent) {
+        errorSent = true;
+        resolve({
+          statusCode: 500,
+          body: JSON.stringify({ error: 'Error procesando el formulario', details: err.message }),
+        });
+      }
     });
 
     bb.end(Buffer.from(event.body, 'base64'));
